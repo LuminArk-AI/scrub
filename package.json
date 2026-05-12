@@ -1,0 +1,23 @@
+{
+    "name": "scrub",
+    "version": "0.1.0",
+    "description": "MCP server that handles repetitive chart-assembly tasks so clinicians can focus on complicated stuff. Built for the Agents Assemble hackathon.",
+    "type": "module",
+    "main": "dist/index.js",
+    "scripts": {
+      "build": "tsc",
+      "start": "node dist/index.js",
+      "dev": "tsx src/index.ts",
+      "test:fhir": "tsx src/scripts/test-fhir.ts",
+      "test:rxnav": "tsx src/scripts/test-rxnav.ts"
+    },
+    "dependencies": {
+      "@modelcontextprotocol/sdk": "^1.0.4",
+      "zod": "^3.23.8"
+    },
+    "devDependencies": {
+      "@types/node": "^22.10.0",
+      "tsx": "^4.19.0",
+      "typescript": "^5.7.0"
+    }
+  }
