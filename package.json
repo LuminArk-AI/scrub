@@ -10,6 +10,7 @@
     "start:http": "node dist/http.js",
     "dev": "tsx src/index.ts",
     "dev:http": "tsx src/http.ts",
+    "serve:public": "npm run build && tsx src/scripts/serve-public.ts",
     "test:fhir": "tsx src/scripts/test-fhir.ts",
     "test:rxnav": "tsx src/scripts/test-rxnav.ts"
     },

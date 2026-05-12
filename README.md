@@ -85,13 +85,22 @@ curl -X POST http://localhost:3000/mcp \
 
 TLS termination is intentionally not done in-process. Pick one:
 
-- **[cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) tunnel** — free, persistent `*.trycloudflare.com` URL, no port-forwarding.
+- **[cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) quick tunnel** — free, no signup, ephemeral `*.trycloudflare.com` URL.
+
+  One command brings up both the server and the tunnel, prints the public URL, and tears down on Ctrl-C:
+  ```bash
+  npm run serve:public
+  ```
+  This builds, starts `node dist/http.js` on `$PORT` (default 3000), and spawns `cloudflared tunnel --url http://localhost:$PORT`. It looks for cloudflared in `$CLOUDFLARED_PATH`, then `~/bin/cloudflared(.exe)`, then `PATH`.
+
+  Or manual two-terminal version:
   ```bash
   npm run start:http
   cloudflared tunnel --url http://localhost:3000
   ```
-- **[ngrok](https://ngrok.com)** — fastest to spin up.
+- **[ngrok](https://ngrok.com)** — fastest to spin up if you already have an account.
   ```bash
+  npm run start:http
   ngrok http 3000
   ```
 - **Render / Fly / Railway** — real hosting, free tier, permanent `*.onrender.com` (etc.) URL with a managed cert. Just point the platform at this repo, set the start command to `npm run build && npm run start:http`, and you're done.
@@ -137,5 +146,6 @@ src/
 │   └── findRecentChanges.ts
 └── scripts/
     ├── test-fhir.ts         # smoke test against HAPI
-    └── test-rxnav.ts        # smoke test against RxNav
+    ├── test-rxnav.ts        # smoke test against RxNav
+    └── serve-public.ts      # spawn HTTP server + cloudflared tunnel together
 ```
