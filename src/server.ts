@@ -12,10 +12,48 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
-import { extractSharpContext } from "./sharp.js";
+import { extractSharpContext, type HeaderBag } from "./sharp.js";
 import { getPatientMedContext } from "./tools/getPatientMedContext.js";
 import { explainMedication } from "./tools/explainMedication.js";
 import { findRecentChanges } from "./tools/findRecentChanges.js";
+
+export interface ScrubServerOptions {
+  /**
+   * HTTP request headers, when running over the Streamable HTTP transport.
+   * Used to pull Prompt Opinion's FHIR context (X-Patient-ID,
+   * X-FHIR-Server-URL, X-FHIR-Access-Token) for each tool call.
+   *
+   * Not set under stdio; in that case context falls back to tool args or
+   * SCRUB_* environment variables.
+   */
+  headers?: HeaderBag;
+}
+
+/**
+ * SMART-on-FHIR scopes scrub needs to do its job.
+ *
+ * Required scopes (without these, none of the tools work):
+ *   - patient/MedicationRequest.rs  — active prescriptions
+ *   - patient/MedicationStatement.rs — self-reported / "patient is taking" meds
+ *
+ * Optional scope (server degrades gracefully without it):
+ *   - patient/Condition.rs — used to resolve a med's reasonReference into
+ *     a readable condition name (the "why" link). If denied, meds still
+ *     return; the reason just won't be enriched.
+ *
+ * Not requested:
+ *   - patient/Patient.rs — scrub never fetches the Patient resource; the
+ *     patient ID arrives in the X-Patient-ID header.
+ *   - offline_access — scrub does no background processing, every tool
+ *     call is request-scoped.
+ */
+const FHIR_CONTEXT_EXTENSION = {
+  scopes: [
+    { name: "patient/MedicationRequest.rs", required: true },
+    { name: "patient/MedicationStatement.rs", required: true },
+    { name: "patient/Condition.rs" },
+  ],
+} as const;
 
 const TOOL_DEFINITIONS = [
   {
@@ -68,10 +106,17 @@ const TOOL_DEFINITIONS = [
   },
 ] as const;
 
-export function createScrubServer(): Server {
+export function createScrubServer(options: ScrubServerOptions = {}): Server {
   const server = new Server(
     { name: "scrub", version: "0.1.0" },
-    { capabilities: { tools: {} } }
+    {
+      capabilities: {
+        tools: {},
+        extensions: {
+          "ai.promptopinion/fhir-context": FHIR_CONTEXT_EXTENSION,
+        },
+      },
+    }
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
@@ -80,7 +125,7 @@ export function createScrubServer(): Server {
 
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
     const { name, arguments: args = {} } = req.params;
-    const ctx = extractSharpContext(args);
+    const ctx = extractSharpContext(args, options.headers);
 
     try {
       let result: unknown;

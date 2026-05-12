@@ -104,7 +104,7 @@ const server = http.createServer(async (req, res) => {
     res.setHeader(k, v);
   }
 
-  const mcpServer = createScrubServer();
+  const mcpServer = createScrubServer({ headers: req.headers });
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
   });

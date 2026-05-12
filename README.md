@@ -107,9 +107,37 @@ TLS termination is intentionally not done in-process. Pick one:
 
 Whichever you pick, your endpoint becomes `https://<host>/mcp`.
 
-## SHARP context
+## FHIR context (Prompt Opinion integration)
 
-This server expects Prompt Opinion to inject SHARP context (patient ID, FHIR base URL, auth token) into each tool call. For local dev, set environment variables instead:
+Scrub speaks Prompt Opinion's `ai.promptopinion/fhir-context` capability, declared in the `initialize` response. When a user adds scrub in Prompt Opinion's MCP Servers page, the "Continue" button reads this declaration and prompts them to grant the SMART-on-FHIR scopes scrub needs.
+
+### Scopes scrub requests
+
+| Scope | Required? | Why |
+|---|---|---|
+| `patient/MedicationRequest.rs` | yes | Active prescriptions — without this, none of the tools work |
+| `patient/MedicationStatement.rs` | yes | Self-reported / "patient is taking" meds — other half of the picture |
+| `patient/Condition.rs` | no | Used to resolve a med's `reasonReference` into a readable name. If denied, meds still return; the "why" link just won't be enriched |
+
+`patient/Patient.rs` is intentionally **not** requested — scrub never fetches the Patient resource itself; the patient identity arrives in the `X-Patient-ID` header.
+
+`offline_access` is also not requested — every tool call is request-scoped, no background work.
+
+### How FHIR context flows in
+
+Prompt Opinion sends three HTTP headers on every tool call:
+
+| Header | Meaning |
+|---|---|
+| `X-FHIR-Server-URL` | base URL of the patient's FHIR server |
+| `X-FHIR-Access-Token` | bearer token for that FHIR server |
+| `X-Patient-ID` | the patient currently in focus |
+
+Scrub reads these in `src/sharp.ts` (`extractSharpContext`) and builds them into the `SharpContext` object that each tool uses for FHIR queries.
+
+### Local dev (stdio, no headers)
+
+Set environment variables instead:
 
 ```bash
 export SCRUB_PATIENT_ID=<patient-id-from-test-fhir>
@@ -117,7 +145,7 @@ export SCRUB_FHIR_BASE=https://hapi.fhir.org/baseR4
 # SCRUB_FHIR_TOKEN optional — HAPI doesn't require auth
 ```
 
-The SHARP field extraction is in `src/sharp.ts` — update the field names there to match the Prompt Opinion reference implementation once you grab it.
+Resolution order in `extractSharpContext`, highest priority first: tool call args (`_sharp` / `_meta.sharp` / top-level) → HTTP headers → environment variables.
 
 ## Stack
 
