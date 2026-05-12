@@ -30,8 +30,73 @@ npm install
 npm run test:fhir     # finds a real patient on HAPI sandbox and pulls their meds
 npm run test:rxnav    # enriches a few known drug codes
 npm run build
-npm start
+npm start             # runs over stdio (for the MCP inspector / local subprocess hosts)
 ```
+
+## Transports
+
+Scrub speaks MCP over two transports out of the box. Same tools, same SHARP-context handling — just different ways of getting requests in.
+
+### Stdio (local)
+
+```bash
+npm start             # built
+npm run dev           # tsx, no build step
+```
+
+For local development with `@modelcontextprotocol/inspector` or any host that spawns the server as a subprocess.
+
+### Streamable HTTP (remote)
+
+```bash
+npm run start:http    # built, listens on $PORT (default 3000)
+npm run dev:http      # tsx
+```
+
+Endpoints:
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /mcp` | MCP Streamable HTTP — initialize, `tools/list`, `tools/call` |
+| `GET /healthz` | plain-text `ok` for tunnel / host healthchecks |
+
+Stateless mode: every POST gets its own server + transport, no session tracking. Works behind any tunnel or load balancer without sticky sessions.
+
+Env:
+
+| Var | Default | Notes |
+|---|---|---|
+| `PORT` | `3000` | Standard for most hosting platforms |
+| `HOST` | `0.0.0.0` | Required for containers / tunnels |
+
+Quick smoke test once it's running:
+
+```bash
+curl http://localhost:3000/healthz
+# -> ok
+
+curl -X POST http://localhost:3000/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"curl","version":"0"}}}'
+```
+
+### Going https://
+
+TLS termination is intentionally not done in-process. Pick one:
+
+- **[cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) tunnel** — free, persistent `*.trycloudflare.com` URL, no port-forwarding.
+  ```bash
+  npm run start:http
+  cloudflared tunnel --url http://localhost:3000
+  ```
+- **[ngrok](https://ngrok.com)** — fastest to spin up.
+  ```bash
+  ngrok http 3000
+  ```
+- **Render / Fly / Railway** — real hosting, free tier, permanent `*.onrender.com` (etc.) URL with a managed cert. Just point the platform at this repo, set the start command to `npm run build && npm run start:http`, and you're done.
+
+Whichever you pick, your endpoint becomes `https://<host>/mcp`.
 
 ## SHARP context
 
@@ -48,7 +113,7 @@ The SHARP field extraction is in `src/sharp.ts` — update the field names there
 ## Stack
 
 - TypeScript + Node
-- `@modelcontextprotocol/sdk` (stdio transport)
+- `@modelcontextprotocol/sdk` (stdio + Streamable HTTP transports)
 - Raw `fetch()` for FHIR — no heavy client library
 - NIH RxNav for drug enrichment (no auth, no rate limit pain)
 - HAPI FHIR public sandbox for testing
@@ -57,7 +122,9 @@ The SHARP field extraction is in `src/sharp.ts` — update the field names there
 
 ```
 src/
-├── index.ts                 # MCP server wiring (tool registration + dispatch)
+├── server.ts                # createScrubServer() — tool registration + dispatch
+├── index.ts                 # stdio entry point
+├── http.ts                  # Streamable HTTP entry point (stateless)
 ├── sharp.ts                 # SHARP context extraction
 ├── fhir/
 │   ├── client.ts            # tiny fetch-based FHIR client
